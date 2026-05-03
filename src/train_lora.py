@@ -30,11 +30,11 @@ def train_lora(
     images_dir: str | Path,
     output_dir: str | Path,
     model_name: str = MODEL_NAME,
-    epochs: int = 3,
-    batch_size: int = 1,
-    learning_rate: float = 3e-5,
+    epochs: int = 15,
+    batch_size: int = 4,
+    learning_rate: float = 1e-4,
     prompt: str = DEFAULT_PROMPT,
-    patience: int = 2,
+    patience: int = 4,
     min_delta: float = 1e-3,
 ):
     output_dir = Path(output_dir)
@@ -120,7 +120,7 @@ def train_lora(
         factor=0.6,
         patience=1,
         threshold=1e-3,
-        min_lr=1e-5,
+        min_lr=5e-6,
     )
 
     history = []

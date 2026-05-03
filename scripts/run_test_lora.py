@@ -3,18 +3,20 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.config import DEFAULT_PROMPT
 from src.image_utils import load_image_from_path
 from src.inference import generate_caption
-from src.model_loader import load_blip_lora_model
+from src.model_loader import load_mblip_lora_model
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Run inference with LoRA fine-tuned BLIP")
+    parser = argparse.ArgumentParser(description="Run inference with LoRA fine-tuned mBLIP.")
 
     parser.add_argument("--annotations-path", type=str, required=True)
     parser.add_argument("--images-dir", type=str, required=True)
     parser.add_argument("--adapter-dir", type=str, required=True)
     parser.add_argument("--output-path", type=str, required=True)
+    parser.add_argument("--prompt", type=str, default=DEFAULT_PROMPT)
 
     return parser.parse_args()
 
@@ -29,20 +31,17 @@ def main():
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     df = pd.read_csv(annotations_path, encoding="utf-8")
-
     df = df.dropna(subset=["caption_lt"])
     df = df[df["caption_lt"].astype(str).str.strip() != ""]
-
     test_df = df[df["split"] == "test"].copy()
 
     print(f"Annotated test samples: {len(test_df)}")
     print(f"Loading LoRA adapter from: {args.adapter_dir}")
+    print(f"Prompt: {args.prompt}")
 
-    processor, model, device = load_blip_lora_model(
+    processor, model = load_mblip_lora_model(
         adapter_dir=args.adapter_dir,
     )
-
-    print(f"Device: {device}")
 
     rows = []
 
@@ -56,7 +55,7 @@ def main():
             image=image,
             processor=processor,
             model=model,
-            device=device,
+            prompt=args.prompt,
         )
 
         rows.append(

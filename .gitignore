@@ -1,0 +1,14 @@
+models/
+data/
+outputs/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+__pycache__/
+.ipynb_checkpoints/
+.env
+
+# PyCharm
+.idea/

@@ -2,20 +2,22 @@ from pathlib import Path
 
 import pandas as pd
 import torch
-from torch.utils.data import DataLoader
-from transformers import BlipForConditionalGeneration, BlipProcessor
 from peft import LoraConfig, get_peft_model
+from torch.utils.data import DataLoader
+from transformers import Blip2ForConditionalGeneration, Blip2Processor
 
-from src.dataset import BlipCaptionDataset
+from src.config import DEFAULT_PROMPT, MODEL_NAME
+from src.dataset import MBlipCaptionDataset
 
 
-def evaluate_loss(model, dataloader, device):
+def evaluate_loss(model, dataloader):
     model.eval()
     total_loss = 0.0
 
     with torch.no_grad():
         for batch in dataloader:
-            batch = {k: v.to(device) for k, v in batch.items()}
+            device = next(model.parameters()).device
+            batch = {key: value.to(device) for key, value in batch.items()}
             outputs = model(**batch)
             total_loss += outputs.loss.item()
 
@@ -27,22 +29,25 @@ def train_lora(
     annotations_path: str | Path,
     images_dir: str | Path,
     output_dir: str | Path,
-    model_name: str = "Salesforce/blip-image-captioning-base",
+    model_name: str = MODEL_NAME,
     epochs: int = 3,
-    batch_size: int = 2,
-    learning_rate: float = 5e-5,
+    batch_size: int = 1,
+    learning_rate: float = 3e-5,
+    prompt: str = DEFAULT_PROMPT,
+    patience: int = 2,
+    min_delta: float = 1e-3,
 ):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Device: {device}")
+    print("Loading processor...")
+    processor = Blip2Processor.from_pretrained(model_name)
 
-    processor = BlipProcessor.from_pretrained(model_name)
-
-    model = BlipForConditionalGeneration.from_pretrained(
+    print("Loading model...")
+    model = Blip2ForConditionalGeneration.from_pretrained(
         model_name,
-        torch_dtype=torch.float16 if device.type == "cuda" else torch.float32,
+        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+        device_map="auto",
     )
 
     lora_config = LoraConfig(
@@ -50,27 +55,27 @@ def train_lora(
         lora_alpha=16,
         lora_dropout=0.05,
         bias="none",
-        target_modules=["query", "key", "value"],
+        target_modules=["q", "v"],
     )
 
     model = get_peft_model(model, lora_config)
-    model.to(device)
     model.train()
-
     model.print_trainable_parameters()
 
-    train_dataset = BlipCaptionDataset(
+    train_dataset = MBlipCaptionDataset(
         annotations_path=annotations_path,
         images_dir=images_dir,
         processor=processor,
         split="train",
+        prompt=prompt,
     )
 
-    val_dataset = BlipCaptionDataset(
+    val_dataset = MBlipCaptionDataset(
         annotations_path=annotations_path,
         images_dir=images_dir,
         processor=processor,
         split="val",
+        prompt=prompt,
     )
 
     print(f"Train samples: {len(train_dataset)}")
@@ -78,13 +83,13 @@ def train_lora(
     print(f"Epochs: {epochs}")
     print(f"Batch size: {batch_size}")
     print(f"Learning rate: {learning_rate}")
+    print(f"Prompt: {prompt}")
 
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
         num_workers=2,
-        pin_memory=device.type == "cuda",
     )
 
     val_loader = DataLoader(
@@ -92,7 +97,6 @@ def train_lora(
         batch_size=batch_size,
         shuffle=False,
         num_workers=2,
-        pin_memory=device.type == "cuda",
     )
 
     optimizer = torch.optim.AdamW(
@@ -111,11 +115,15 @@ def train_lora(
 
     history = []
 
+    best_val_loss = float("inf")
+    epochs_no_improve = 0
+
     for epoch in range(epochs):
         total_train_loss = 0.0
 
         for step, batch in enumerate(train_loader, start=1):
-            batch = {k: v.to(device) for k, v in batch.items()}
+            device = next(model.parameters()).device
+            batch = {key: value.to(device) for key, value in batch.items()}
 
             outputs = model(**batch)
             loss = outputs.loss
@@ -134,8 +142,12 @@ def train_lora(
                 )
 
         avg_train_loss = total_train_loss / max(len(train_loader), 1)
-        avg_val_loss = evaluate_loss(model, val_loader, device)
+        avg_val_loss = evaluate_loss(model, val_loader)
+
+        scheduler.step(avg_val_loss)
         current_lr = optimizer.param_groups[0]["lr"]
+
+        improved = avg_val_loss < best_val_loss - min_delta
 
         history.append(
             {
@@ -143,16 +155,33 @@ def train_lora(
                 "train_loss": avg_train_loss,
                 "val_loss": avg_val_loss,
                 "lr": current_lr,
+                "improved": improved,
             }
         )
 
         print(
             f"Epoch {epoch + 1}/{epochs} | "
             f"Train loss: {avg_train_loss:.4f} | "
-            f"Val loss: {avg_val_loss:.4f}"
+            f"Val loss: {avg_val_loss:.4f} | "
+            f"LR: {current_lr:.8f}"
         )
 
-        scheduler.step(avg_val_loss)
+        if improved:
+            best_val_loss = avg_val_loss
+            epochs_no_improve = 0
+
+            best_dir = output_dir / "best"
+            model.save_pretrained(best_dir)
+            processor.save_pretrained(best_dir)
+
+            print("Saved best model")
+        else:
+            epochs_no_improve += 1
+            print(f"No improvement for {epochs_no_improve} epochs")
+
+            if epochs_no_improve >= patience:
+                print("Early stopping triggered")
+                break
 
     log_path = output_dir / "training_log.csv"
     pd.DataFrame(history).to_csv(log_path, index=False, encoding="utf-8")
@@ -161,4 +190,4 @@ def train_lora(
     model.save_pretrained(output_dir)
     processor.save_pretrained(output_dir)
 
-    print(f"Saved LoRA weights to: {output_dir}")
+    print(f"Saved LoRA adapter to: {output_dir}")

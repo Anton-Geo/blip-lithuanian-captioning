@@ -4,11 +4,21 @@ import pandas as pd
 from PIL import Image
 from torch.utils.data import Dataset
 
+from src.config import DEFAULT_PROMPT, MAX_TEXT_LENGTH
 
-class BlipCaptionDataset(Dataset):
-    def __init__(self, annotations_path: str | Path, images_dir: str | Path, processor, split: str):
+
+class MBlipCaptionDataset(Dataset):
+    def __init__(
+        self,
+        annotations_path: str | Path,
+        images_dir: str | Path,
+        processor,
+        split: str,
+        prompt: str = DEFAULT_PROMPT,
+    ):
         self.images_dir = Path(images_dir)
         self.processor = processor
+        self.prompt = prompt
 
         df = pd.read_csv(annotations_path, encoding="utf-8")
 
@@ -30,17 +40,21 @@ class BlipCaptionDataset(Dataset):
 
         encoding = self.processor(
             images=image,
-            text=caption,
-            padding="max_length",
-            truncation=True,
-            max_length=64,
+            text=self.prompt,
             return_tensors="pt",
         )
 
-        encoding = {k: v.squeeze(0) for k, v in encoding.items()}
+        labels = self.processor.tokenizer(
+            caption,
+            padding="max_length",
+            truncation=True,
+            max_length=MAX_TEXT_LENGTH,
+            return_tensors="pt",
+        ).input_ids
 
-        labels = encoding["input_ids"].clone()
         labels[labels == self.processor.tokenizer.pad_token_id] = -100
-        encoding["labels"] = labels
+
+        encoding = {key: value.squeeze(0) for key, value in encoding.items()}
+        encoding["labels"] = labels.squeeze(0)
 
         return encoding

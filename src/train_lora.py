@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 from transformers import BlipForConditionalGeneration, BlipProcessor
@@ -31,6 +32,9 @@ def train_lora(
     batch_size: int = 2,
     learning_rate: float = 5e-5,
 ):
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
@@ -71,6 +75,9 @@ def train_lora(
 
     print(f"Train samples: {len(train_dataset)}")
     print(f"Val samples: {len(val_dataset)}")
+    print(f"Epochs: {epochs}")
+    print(f"Batch size: {batch_size}")
+    print(f"Learning rate: {learning_rate}")
 
     train_loader = DataLoader(
         train_dataset,
@@ -93,6 +100,8 @@ def train_lora(
         lr=learning_rate,
     )
 
+    history = []
+
     for epoch in range(epochs):
         total_train_loss = 0.0
 
@@ -109,10 +118,22 @@ def train_lora(
             total_train_loss += loss.item()
 
             if step % 20 == 0:
-                print(f"Epoch {epoch + 1}, step {step}/{len(train_loader)}, loss: {loss.item():.4f}")
+                print(
+                    f"Epoch {epoch + 1}, "
+                    f"step {step}/{len(train_loader)}, "
+                    f"loss: {loss.item():.4f}"
+                )
 
         avg_train_loss = total_train_loss / max(len(train_loader), 1)
         avg_val_loss = evaluate_loss(model, val_loader, device)
+
+        history.append(
+            {
+                "epoch": epoch + 1,
+                "train_loss": avg_train_loss,
+                "val_loss": avg_val_loss,
+            }
+        )
 
         print(
             f"Epoch {epoch + 1}/{epochs} | "
@@ -120,8 +141,9 @@ def train_lora(
             f"Val loss: {avg_val_loss:.4f}"
         )
 
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    log_path = output_dir / "training_log.csv"
+    pd.DataFrame(history).to_csv(log_path, index=False, encoding="utf-8")
+    print(f"Saved training log to: {log_path}")
 
     model.save_pretrained(output_dir)
     processor.save_pretrained(output_dir)

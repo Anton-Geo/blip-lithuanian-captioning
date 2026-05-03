@@ -11,8 +11,8 @@ if torch.cuda.is_available():
 
 
 train_lora(
-    annotations_path="dataset/annotations.csv",
-    images_dir="dataset/images",
+    annotations_path="/content/dataset/annotations.csv",
+    images_dir="/content/dataset/images",
     output_dir="/content/drive/MyDrive/dl_task2/models/blip-lora-lithuanian",
     epochs=3,
     batch_size=2,

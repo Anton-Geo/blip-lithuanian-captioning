@@ -1,0 +1,16 @@
+models/
+data/raw/images/
+data/processed/
+outputs/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+*.zip
+__pycache__/
+.ipynb_checkpoints/
+.env
+
+# PyCharm
+.idea/

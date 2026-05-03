@@ -34,7 +34,7 @@ def train_lora(
     batch_size: int = 4,
     learning_rate: float = 1e-4,
     prompt: str = DEFAULT_PROMPT,
-    patience: int = 4,
+    patience: int = 5,
     min_delta: float = 1e-3,
 ):
     output_dir = Path(output_dir)
@@ -117,7 +117,7 @@ def train_lora(
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         mode="min",
-        factor=0.6,
+        factor=0.5,
         patience=1,
         threshold=1e-3,
         min_lr=5e-6,
@@ -153,12 +153,12 @@ def train_lora(
 
             total_train_loss += loss.item()
 
-            if step % 20 == 0:
-                print(
-                    f"Epoch {epoch + 1}, "
-                    f"step {step}/{len(train_loader)}, "
-                    f"loss: {loss.item():.4f}"
-                )
+            # if step % 20 == 0:
+            #     print(
+            #         f"Epoch {epoch + 1}, "
+            #         f"step {step}/{len(train_loader)}, "
+            #         f"loss: {loss.item():.4f}"
+            #     )
 
         avg_train_loss = total_train_loss / max(len(train_loader), 1)
         avg_val_loss = evaluate_loss(model, val_loader)

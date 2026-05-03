@@ -10,7 +10,7 @@ class BlipCaptionDataset(Dataset):
         self.images_dir = Path(images_dir)
         self.processor = processor
 
-        df = pd.read_csv(annotations_path)
+        df = pd.read_csv(annotations_path, encoding="utf-8")
 
         df = df.dropna(subset=["caption_lt"])
         df = df[df["caption_lt"].astype(str).str.strip() != ""]

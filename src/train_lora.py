@@ -44,9 +44,19 @@ def train_lora(
     processor = Blip2Processor.from_pretrained(model_name)
 
     print("Loading model...")
+
+    if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
+        model_dtype = torch.bfloat16
+    elif torch.cuda.is_available():
+        model_dtype = torch.float16
+    else:
+        model_dtype = torch.float32
+
+    print(f"Model dtype: {model_dtype}")
+
     model = Blip2ForConditionalGeneration.from_pretrained(
         model_name,
-        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+        torch_dtype=model_dtype,
         device_map="auto",
     )
 
@@ -128,7 +138,16 @@ def train_lora(
             outputs = model(**batch)
             loss = outputs.loss
 
+            if torch.isnan(loss) or torch.isinf(loss):
+                raise ValueError(f"Non-finite loss detected: {loss.item()}")
+
             loss.backward()
+
+            torch.nn.utils.clip_grad_norm_(
+                filter(lambda p: p.requires_grad, model.parameters()),
+                max_norm=1.0,
+            )
+
             optimizer.step()
             optimizer.zero_grad()
 

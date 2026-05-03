@@ -100,6 +100,15 @@ def train_lora(
         lr=learning_rate,
     )
 
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=0.6,
+        patience=1,
+        threshold=1e-3,
+        min_lr=1e-5,
+    )
+
     history = []
 
     for epoch in range(epochs):
@@ -126,12 +135,14 @@ def train_lora(
 
         avg_train_loss = total_train_loss / max(len(train_loader), 1)
         avg_val_loss = evaluate_loss(model, val_loader, device)
+        current_lr = optimizer.param_groups[0]["lr"]
 
         history.append(
             {
                 "epoch": epoch + 1,
                 "train_loss": avg_train_loss,
                 "val_loss": avg_val_loss,
+                "lr": current_lr,
             }
         )
 
@@ -140,6 +151,8 @@ def train_lora(
             f"Train loss: {avg_train_loss:.4f} | "
             f"Val loss: {avg_val_loss:.4f}"
         )
+
+        scheduler.step(avg_val_loss)
 
     log_path = output_dir / "training_log.csv"
     pd.DataFrame(history).to_csv(log_path, index=False, encoding="utf-8")

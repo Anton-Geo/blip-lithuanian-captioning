@@ -4,3 +4,7 @@ transformers
 pillow
 requests
 accelerate
+fiftyone
+pandas
+tqdm
+nltk

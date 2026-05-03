@@ -1,4 +1,5 @@
 from io import BytesIO
+from pathlib import Path
 
 import requests
 from PIL import Image
@@ -10,3 +11,7 @@ def load_image_from_url(url: str) -> Image.Image:
 
     image = Image.open(BytesIO(response.content)).convert("RGB")
     return image
+
+
+def load_image_from_path(path: str | Path) -> Image.Image:
+    return Image.open(path).convert("RGB")

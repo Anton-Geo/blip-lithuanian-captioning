@@ -4,11 +4,12 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import torch
 from PIL import Image
-from sentence_transformers import SentenceTransformer
+from transformers import CLIPModel, CLIPProcessor
 
 
-MODEL_NAME = "sentence-transformers/clip-ViT-B-32-multilingual-v1"
+MODEL_NAME = "openai/clip-vit-base-patch32"
 
 
 def parse_args():
@@ -28,10 +29,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def cosine_scores(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    return np.sum(a * b, axis=1)
-
-
 def summarize(scores: np.ndarray) -> dict:
     return {
         "mean": float(np.mean(scores)),
@@ -42,18 +39,55 @@ def summarize(scores: np.ndarray) -> dict:
     }
 
 
-def load_images(images_dir: Path, filenames: list[str]) -> list[Image.Image]:
-    images = []
+def cosine_scores(a: torch.Tensor, b: torch.Tensor) -> np.ndarray:
+    a = torch.nn.functional.normalize(a, dim=-1)
+    b = torch.nn.functional.normalize(b, dim=-1)
+    return torch.sum(a * b, dim=-1).detach().cpu().numpy()
 
-    for filename in filenames:
-        image_path = images_dir / filename
 
-        if not image_path.exists():
-            raise FileNotFoundError(f"Image not found: {image_path}")
+@torch.no_grad()
+def encode_images(model, processor, images, device, batch_size=16):
+    embeddings = []
 
-        images.append(Image.open(image_path).convert("RGB"))
+    for start in range(0, len(images), batch_size):
+        batch = images[start : start + batch_size]
 
-    return images
+        inputs = processor(
+            images=batch,
+            return_tensors="pt",
+            padding=True,
+        ).to(device)
+
+        image_outputs = model.vision_model(**inputs)
+        image_features = image_outputs.pooler_output
+        image_features = model.visual_projection(image_features)
+
+        embeddings.append(image_features.detach().cpu())
+
+    return torch.cat(embeddings, dim=0)
+
+
+@torch.no_grad()
+def encode_texts(model, processor, texts, device, batch_size=32):
+    embeddings = []
+
+    for start in range(0, len(texts), batch_size):
+        batch = texts[start : start + batch_size]
+
+        inputs = processor(
+            text=batch,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+        ).to(device)
+
+        text_outputs = model.text_model(**inputs)
+        text_features = text_outputs.pooler_output
+        text_features = model.text_projection(text_features)
+
+        embeddings.append(text_features.detach().cpu())
+
+    return torch.cat(embeddings, dim=0)
 
 
 def main():
@@ -74,51 +108,30 @@ def main():
     df[args.baseline_column] = df[args.baseline_column].astype(str)
     df[args.finetuned_column] = df[args.finetuned_column].astype(str)
 
-    print(f"Samples: {len(df)}")
-    print(f"Loading model: {MODEL_NAME}")
-
-    model = SentenceTransformer(MODEL_NAME)
-
     images_dir = Path(args.images_dir)
-    filenames = df[args.filename_column].astype(str).tolist()
-
-    images = load_images(images_dir, filenames)
+    images = [
+        Image.open(images_dir / filename).convert("RGB")
+        for filename in df[args.filename_column].astype(str).tolist()
+    ]
 
     references = df[args.reference_column].tolist()
     baseline_predictions = df[args.baseline_column].tolist()
     finetuned_predictions = df[args.finetuned_column].tolist()
 
-    image_emb = model.encode(
-        images,
-        normalize_embeddings=True,
-        convert_to_numpy=True,
-        batch_size=16,
-        show_progress_bar=True,
-    )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    ref_emb = model.encode(
-        references,
-        normalize_embeddings=True,
-        convert_to_numpy=True,
-        batch_size=32,
-        show_progress_bar=True,
-    )
+    print(f"Samples: {len(df)}")
+    print(f"Loading model: {MODEL_NAME}")
+    print(f"Device: {device}")
 
-    baseline_emb = model.encode(
-        baseline_predictions,
-        normalize_embeddings=True,
-        convert_to_numpy=True,
-        batch_size=32,
-        show_progress_bar=True,
-    )
+    processor = CLIPProcessor.from_pretrained(MODEL_NAME)
+    model = CLIPModel.from_pretrained(MODEL_NAME).to(device)
+    model.eval()
 
-    finetuned_emb = model.encode(
-        finetuned_predictions,
-        normalize_embeddings=True,
-        convert_to_numpy=True,
-        batch_size=32,
-        show_progress_bar=True,
-    )
+    image_emb = encode_images(model, processor, images, device)
+    ref_emb = encode_texts(model, processor, references, device)
+    baseline_emb = encode_texts(model, processor, baseline_predictions, device)
+    finetuned_emb = encode_texts(model, processor, finetuned_predictions, device)
 
     df["clip_image_reference"] = cosine_scores(image_emb, ref_emb)
     df["clip_image_baseline"] = cosine_scores(image_emb, baseline_emb)

@@ -50,7 +50,7 @@ def encode_images(model, processor, images, device, batch_size=16):
     embeddings = []
 
     for start in range(0, len(images), batch_size):
-        batch = images[start : start + batch_size]
+        batch = images[start:start + batch_size]
 
         inputs = processor(
             images=batch,
@@ -58,11 +58,8 @@ def encode_images(model, processor, images, device, batch_size=16):
             padding=True,
         ).to(device)
 
-        image_outputs = model.vision_model(**inputs)
-        image_features = image_outputs.pooler_output
-        image_features = model.visual_projection(image_features)
-
-        embeddings.append(image_features.detach().cpu())
+        image_features = model.get_image_features(**inputs)
+        embeddings.append(image_features.cpu())
 
     return torch.cat(embeddings, dim=0)
 
@@ -72,7 +69,7 @@ def encode_texts(model, processor, texts, device, batch_size=32):
     embeddings = []
 
     for start in range(0, len(texts), batch_size):
-        batch = texts[start : start + batch_size]
+        batch = texts[start:start + batch_size]
 
         inputs = processor(
             text=batch,
@@ -81,11 +78,8 @@ def encode_texts(model, processor, texts, device, batch_size=32):
             truncation=True,
         ).to(device)
 
-        text_outputs = model.text_model(**inputs)
-        text_features = text_outputs.pooler_output
-        text_features = model.text_projection(text_features)
-
-        embeddings.append(text_features.detach().cpu())
+        text_features = model.get_text_features(**inputs)
+        embeddings.append(text_features.cpu())
 
     return torch.cat(embeddings, dim=0)
 
@@ -104,19 +98,15 @@ def main():
         how="inner",
     )
 
-    df[args.reference_column] = df[args.reference_column].astype(str)
-    df[args.baseline_column] = df[args.baseline_column].astype(str)
-    df[args.finetuned_column] = df[args.finetuned_column].astype(str)
-
     images_dir = Path(args.images_dir)
     images = [
         Image.open(images_dir / filename).convert("RGB")
         for filename in df[args.filename_column].astype(str).tolist()
     ]
 
-    references = df[args.reference_column].tolist()
-    baseline_predictions = df[args.baseline_column].tolist()
-    finetuned_predictions = df[args.finetuned_column].tolist()
+    references = df[args.reference_column].astype(str).tolist()
+    baseline_predictions = df[args.baseline_column].astype(str).tolist()
+    finetuned_predictions = df[args.finetuned_column].astype(str).tolist()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -129,6 +119,7 @@ def main():
     model.eval()
 
     image_emb = encode_images(model, processor, images, device)
+
     ref_emb = encode_texts(model, processor, references, device)
     baseline_emb = encode_texts(model, processor, baseline_predictions, device)
     finetuned_emb = encode_texts(model, processor, finetuned_predictions, device)

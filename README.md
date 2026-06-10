@@ -238,7 +238,7 @@ The following examples compare the reference caption, the original model output,
 <table>
 <tr>
 <td width="35%">
-<img src="figures/img_001025.jpg" width="100%">
+<img src="figures/img_001025.jpg" width="280">
 </td>
 <td width="65%">
 
@@ -249,8 +249,8 @@ Gatvė šalia senovinio pastato su bokštais.
 |-------------------|------------------------------------------------------------------------------------------------------------------------------------|
 | mBLIP Base        | automobilis, važiuojantis gatvėje šalia tvirtovės                                                                                  |
 | mBLIP LoRA Exp6   | Istorinis pastatas gatvėje su automobiliu.                                                                                         |
-| Gemma 4 Base      | Šiame pieseje matyti senas, kalejinis stilius, pilis, šalia kurio yra modernus pastatas, o gatvėje važiuoja automobilis.           |
-| Gemma 4 LoRA Exp2 | Šiame pieseje matyti senas, fortifikacijos stiliaus pastatas, esantis miežio aplinkoje, su šaliai esančia modernia pastatų dalimi. |
+| Gemma 4 Base      | Šiame pieseje matyti senas, kalejinis stilius, pilis, <br> šalia kurio yra modernus pastatas, o gatvėje važiuoja automobilis.           |
+| Gemma 4 LoRA Exp2 | Šiame pieseje matyti senas, fortifikacijos stiliaus pastatas, <br> esantis miežio aplinkoje, su šaliai esančia modernia pastatų dalimi. |
 
 | Model             | Semantic similarity | CLIPScore |
 |-------------------|---------------------|-----------|
@@ -270,7 +270,7 @@ Reference CLIPScore: `0.2154`
 <table>
 <tr>
 <td width="35%">
-<img src="figures/img_001040.jpg" width="100%">
+<img src="figures/img_001040.jpg" width="280">
 </td>
 <td width="65%">
 
@@ -302,7 +302,7 @@ Reference CLIPScore: `0.1700`
 <table>
 <tr>
 <td width="35%">
-<img src="figures/img_001028.jpg" width="100%">
+<img src="figures/img_001028.jpg" width="280">
 </td>
 <td width="65%">
 
@@ -313,8 +313,8 @@ Lenktyninis kartas trasoje važiavimo metu.
 |-------------------|-----------------------------------------------------------------------------------------------------------|
 | mBLIP Base        | Žmogus, važiuojantis mėlynos spalvos automobiliu.                                                         |
 | mBLIP LoRA Exp6   | Autosporto dalyvis, važiuojantis gatve.                                                                   |
-| Gemma 4 Base      | Šiame vaizde matomas mėlynas, sportinis, dviračioje judantis automobilis, kuris yra paruoštas užklausoms. |
-| Gemma 4 LoRA Exp2 | Šiame vaizde matomas mėlynas, sportinis, dviračioje judantis automobilis, kuris yra paruoštas užklausoms. |
+| Gemma 4 Base      | Šiame vaizde matomas mėlynas, sportinis, <br> dviračioje judantis automobilis, kuris yra paruoštas užklausoms. |
+| Gemma 4 LoRA Exp2 | Šiame vaizde matomas mėlynas, sportinis, <br> dviračioje judantis automobilis, kuris yra paruoštas užklausoms. |
 
 | Model             | Semantic similarity | CLIPScore |
 |-------------------|---------------------|-----------|
